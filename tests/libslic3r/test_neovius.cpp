@@ -1,6 +1,6 @@
 #include <catch2/catch.hpp>
 #include "libslic3r/Fill/FillNeovius.hpp"
-#include "libslic3r/Fill/FillNeovius.cpp"
+// #include "libslic3r/Fill/FillNeovius.cpp" // Do not include .cpp, link against library instead
 
 // NOTE: We include .cpp directly or we need to expose the static functions for testing.
 // Ideally, we'd test the public API, but testing logic is easier with internal access.
