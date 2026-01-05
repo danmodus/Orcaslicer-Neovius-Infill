@@ -103,7 +103,9 @@ echo on
 REM Set minimum CMake policy to avoid <3.5 errors
 set CMAKE_POLICY_VERSION_MINIMUM=3.5
 cmake ../ -G "%CMAKE_GENERATOR%" -A x64 -DCMAKE_BUILD_TYPE=%build_type%
+if %errorlevel% neq 0 exit /b %errorlevel%
 cmake --build . --config %build_type% --target deps -- -m
+if %errorlevel% neq 0 exit /b %errorlevel%
 @echo off
 
 if "%1"=="deps" exit /b 0
@@ -116,8 +118,10 @@ cd %build_dir%
 
 echo on
 set CMAKE_POLICY_VERSION_MINIMUM=3.5
-cmake .. -G %CMAKE_GENERATOR% -A x64 -DORCA_TOOLS=ON %SIG_FLAG% -DCMAKE_BUILD_TYPE=%build_type% -DCMAKE_POLICY_VERSION_MINIMUM="%CMAKE_POLICY_VERSION_MINIMUM%"
+cmake .. -G "%CMAKE_GENERATOR%" -A x64 -DORCA_TOOLS=ON %SIG_FLAG% -DCMAKE_BUILD_TYPE=%build_type% -DCMAKE_POLICY_VERSION_MINIMUM="%CMAKE_POLICY_VERSION_MINIMUM%"
+if %errorlevel% neq 0 exit /b %errorlevel%
 cmake --build . --config %build_type% --target ALL_BUILD -- -m
+if %errorlevel% neq 0 exit /b %errorlevel%
 @echo off
 cd ..
 call scripts/run_gettext.bat
