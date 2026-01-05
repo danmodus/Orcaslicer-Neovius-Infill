@@ -22,12 +22,14 @@ public:
     static constexpr float CorrectionAngle = -45.;
 
     // Density adjustment to have a good %of weight.
-    // Neovius has higher surface area density than Gyroid, so we increase this factor
-    // to maintain the correct solid volume fraction.
-    static constexpr double DensityAdjust = 3.0;
+    // Neovius has higher surface area density than Gyroid, so we decrease this factor
+    // (relative to Gyroid's 2.44) to increase spacing and maintain correct solid volume fraction.
+    // Approx factor: 2.44 (Gyroid) * (Area_Gyroid / Area_Neovius) ~= 2.44 * (2.4 / 3.2) ~= 1.8. 
+    // We choose 2.0 to be slightly robust.
+    static constexpr double DensityAdjust = 2.0;
 
     // Neovius upper resolution tolerance (mm^-2)
-    static constexpr double PatternTolerance = 0.2;
+    static constexpr double PatternTolerance = 0.5;
 
 protected:
     void _fill_surface_single(const FillParams&              params,
