@@ -5,6 +5,11 @@ set WP=%CD%
 @REM Detect Visual Studio version using msbuild
 echo Detecting Visual Studio version using msbuild...
 
+if defined CMAKE_GENERATOR (
+    echo CMAKE_GENERATOR environment variable is set to: %CMAKE_GENERATOR%
+    goto :pack_check
+)
+
 @REM Try to get MSBuild version - the output format varies by VS version
 set VS_MAJOR=
 for /f "tokens=*" %%i in ('msbuild -version 2^>^&1 ^| findstr /r "^[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"') do (
@@ -34,13 +39,13 @@ if "%VS_MAJOR%"=="" (
 
 if "%VS_MAJOR%"=="16" (
     set VS_VERSION=2019
-    set CMAKE_GENERATOR="Visual Studio 16 2019"
+    set CMAKE_GENERATOR=Visual Studio 16 2019
 ) else if "%VS_MAJOR%"=="17" (
     set VS_VERSION=2022
-    set CMAKE_GENERATOR="Visual Studio 17 2022"
+    set CMAKE_GENERATOR=Visual Studio 17 2022
 ) else if "%VS_MAJOR%"=="18" (
     set VS_VERSION=2026
-    set CMAKE_GENERATOR="Visual Studio 18 2026"
+    set CMAKE_GENERATOR=Visual Studio 18 2026
 ) else (
     echo Error: Unsupported Visual Studio version: %VS_MAJOR%
     echo Supported versions: VS2019 (16.x^), VS2022 (17.x^), VS2026 (18.x^)
@@ -50,6 +55,7 @@ if "%VS_MAJOR%"=="16" (
 echo Detected Visual Studio %VS_VERSION% (version %VS_MAJOR%)
 echo Using CMake generator: %CMAKE_GENERATOR%
 
+:pack_check
 @REM Pack deps
 if "%1"=="pack" (
     setlocal ENABLEDELAYEDEXPANSION 
@@ -96,7 +102,7 @@ echo "building deps.."
 echo on
 REM Set minimum CMake policy to avoid <3.5 errors
 set CMAKE_POLICY_VERSION_MINIMUM=3.5
-cmake ../ -G %CMAKE_GENERATOR% -A x64 -DCMAKE_BUILD_TYPE=%build_type%
+cmake ../ -G "%CMAKE_GENERATOR%" -A x64 -DCMAKE_BUILD_TYPE=%build_type%
 cmake --build . --config %build_type% --target deps -- -m
 @echo off
 
@@ -110,7 +116,7 @@ cd %build_dir%
 
 echo on
 set CMAKE_POLICY_VERSION_MINIMUM=3.5
-cmake .. -G %CMAKE_GENERATOR% -A x64 -DORCA_TOOLS=ON %SIG_FLAG% -DCMAKE_BUILD_TYPE=%build_type%
+cmake .. -G %CMAKE_GENERATOR% -A x64 -DORCA_TOOLS=ON %SIG_FLAG% -DCMAKE_BUILD_TYPE=%build_type% -DCMAKE_POLICY_VERSION_MINIMUM="%CMAKE_POLICY_VERSION_MINIMUM%"
 cmake --build . --config %build_type% --target ALL_BUILD -- -m
 @echo off
 cd ..
