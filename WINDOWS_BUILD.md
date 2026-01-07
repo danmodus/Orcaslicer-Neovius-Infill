@@ -35,7 +35,7 @@ Install these tools using a terminal (like PowerShell) or download them manually
     ```
 3.  Run the build script:
     ```cmd
-    build_release_vs2022.bat
+    build_release_vs2026.bat
     ```
     *(This script will automatically build all dependencies and then OrcaSlicer itself).*
 

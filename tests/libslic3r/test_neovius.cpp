@@ -1,5 +1,6 @@
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 #include "libslic3r/Fill/FillNeovius.hpp"
+#include "libslic3r/Surface.hpp"
 // #include "libslic3r/Fill/FillNeovius.cpp" // Do not include .cpp, link against library instead
 
 // NOTE: We include .cpp directly or we need to expose the static functions for testing.
@@ -46,7 +47,7 @@ TEST_CASE("Neovius Fill: Periodicity Check", "[Neovius]")
     params.dont_adjust = true;
 
     // Create a 100x100mm square
-    ExPolygon square({{{0, 0}, {100000000, 0}, {100000000, 100000000}, {0, 100000000}}}); // 100mm scaled
+    ExPolygon square(Polygon({Point(0, 0), Point(100000000, 0), Point(100000000, 100000000), Point(0, 100000000)}));
 
     Surface surface(stTop, square);
 
@@ -92,7 +93,7 @@ TEST_CASE("Neovius Fill: Variable Layer Height consistency", "[Neovius]")
     FillParams            params;
     params.density = 0.15;
 
-    ExPolygon area({{{0, 0}, {50000000, 0}, {50000000, 50000000}, {0, 50000000}}}); // 50x50mm
+    ExPolygon area(Polygon({Point(0, 0), Point(50000000, 0), Point(50000000, 50000000), Point(0, 50000000)}));
     Surface   surface(stInternal, area);
     filler->spacing = 0.45;
 
@@ -153,5 +154,5 @@ TEST_CASE("Neovius Math: Singularity avoidance", "[Neovius]")
     // res should be acos(-6/7)
 
     res = test_solve_neovius_math(0, 1.0);
-    REQUIRE(res == Approx(acos(-6.0 / 7.0)));
+    REQUIRE(res == Catch::Approx(acos(-6.0 / 7.0)));
 }

@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.13)
+message(STATUS "EXECUTING UPDATED TOP-LEVEL CMAKELISTS.TXT")
 
 # Verify that your CMake version is exactly 3.5 series or higher on windows
 if ( (MSVC OR WIN32) AND (${CMAKE_VERSION} VERSION_LESS "3.5") )
@@ -580,7 +581,18 @@ endif()
 if(POLICY CMP0167)
   cmake_policy(SET CMP0167 NEW)
 endif()
-find_package(Boost 1.83.0 REQUIRED COMPONENTS system filesystem thread log log_setup locale regex chrono atomic date_time iostreams program_options nowide)
+
+# Help CMake find Boost if it's in our deps folder
+# On Windows, Boost config files are often in lib/cmake/Boost-1.84.0/
+if(WIN32 AND NOT Boost_DIR)
+    file(GLOB BOOST_CONFIG_DIRS "${CMAKE_PREFIX_PATH}/lib/cmake/Boost-*")
+    if(BOOST_CONFIG_DIRS)
+        list(GET BOOST_CONFIG_DIRS 0 Boost_DIR)
+        message(STATUS "Manually setting Boost_DIR to: ${Boost_DIR}")
+    endif()
+endif()
+
+find_package(Boost 1.80.0 REQUIRED COMPONENTS system filesystem thread log log_setup locale regex chrono atomic date_time iostreams program_options nowide)
 
 add_library(boost_libs INTERFACE)
 add_library(boost_headeronly INTERFACE)

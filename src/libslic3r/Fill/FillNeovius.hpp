@@ -26,7 +26,7 @@ public:
     // (relative to Gyroid's 2.44) to increase spacing and maintain correct solid volume fraction.
     // Approx factor: 2.44 (Gyroid) * (Area_Gyroid / Area_Neovius) ~= 2.44 * (2.4 / 3.2) ~= 1.8. 
     // We choose 2.0 to be slightly robust.
-    static constexpr double DensityAdjust = 2.0;
+    static constexpr double DensityAdjust = 1.8;
 
     // Neovius upper resolution tolerance (mm^-2)
     static constexpr double PatternTolerance = 0.5;

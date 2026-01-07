@@ -123,207 +123,107 @@ static inline Vec2d evaluate_neovius(double t, const NeoviusContext& ctx, bool u
 }
 
 // Check for slope/curvature to subdivide
-// This is recursive
-static void subdivide_segment(
-    std::vector<Vec2d>& points, Vec2d p1, Vec2d p2, const NeoviusContext& ctx, bool upper_branch, double tolerance_sq)
+static void subdivide_segment(std::vector<Vec2d>& points, Vec2d p1, Vec2d p2, const NeoviusContext& ctx, bool upper_branch, double tolerance)
 {
     // Midpoint in parameter space (x)
     double t_mid       = (p1.x() + p2.x()) * 0.5;
     Vec2d  p_mid_curve = evaluate_neovius(t_mid, ctx, upper_branch);
 
-    if (std::isnan(p_mid_curve.y())) {
-        // If midpoint is invalid, we might be crossing a boundary.
-        // We can't easily refine this with simple recursion assuming connectedness.
-        // But assuming we are inside a valid period, let's just stop or assume linear.
+    if (std::isnan(p_mid_curve.y()))
         return;
-    }
 
-    // Check distance from linear segment midpoint to curve midpoint
+    // Linear midpoint
     Vec2d  p_mid_segment = (p1 + p2) * 0.5;
     double distinct_sq   = (p_mid_curve - p_mid_segment).squaredNorm();
 
-    if (distinct_sq > tolerance_sq) {
-        // Recurse
-        if (std::abs(t_mid - p1.x()) > 1e-4) { // limit recursion depth
-            subdivide_segment(points, p1, p_mid_curve, ctx, upper_branch, tolerance_sq);
+    if (distinct_sq > tolerance * tolerance) {
+        if (std::abs(p1.x() - p2.x()) > 1e-5) { // limit recursion
+            subdivide_segment(points, p1, p_mid_curve, ctx, upper_branch, tolerance);
             points.push_back(p_mid_curve);
-            subdivide_segment(points, p_mid_curve, p2, ctx, upper_branch, tolerance_sq);
+            subdivide_segment(points, p_mid_curve, p2, ctx, upper_branch, tolerance);
         }
     }
 }
 
-static std::vector<Vec2d> make_one_period(double width, double scaleFactor, double z_cos, double z_sin, double tolerance)
+static std::vector<std::vector<Vec2d>> make_one_period(double width, double scaleFactor, double z_cos, double z_sin, double tolerance)
 {
-    // Generate Neovius profile for x in [0, 2pi]
-    // Due to symmetry, we can generate just one branch and flip?
-    // Equation is symmetric Ox, Oy.
-
-    std::vector<Vec2d> points;
-    double             dx    = PI / 9.0; // 20 degrees coarse steps
-    double             limit = std::min(2 * PI, width);
-
-    // We only generate if the slice of surface exists here.
-    // Check z condition?
-    // 3(cx+cy+cz) + 4cx cy cz = 0
-    // At x=0: 3(1+cy+cz) + 4 cy cz = 0 => 3+3cz + cy(3+4cz) = 0 => cy = -3(1+cz)/(3+4cz).
+    std::vector<std::vector<Vec2d>> segments;
+    std::vector<Vec2d>              current_segment;
+    double                          dx    = PI / 60.0; // Finer base resolution
+    double                          limit = std::min(2 * PI, width);
 
     NeoviusContext ctx{z_cos, z_sin};
 
-    // We need to trace the "Upper" branch (y > 0) and "Lower" branch (y < 0)?
-    // Or just one and handle the other by symmetry in make_wave.
-    // Let's generate the positive branch (acos output).
-    // Note: this may be discontinuous if the isoline breaks.
-
-    bool  last_valid = false;
-    Vec2d last_p;
-
-    // Initial point
-    {
-        bool   valid;
-        double y = solve_neovius(0, z_cos, z_sin, valid);
-        if (valid) {
-            last_p = Vec2d(0, y);
-            points.push_back(last_p);
-            last_valid = true;
-        }
-    }
-
-    for (double x = dx; x <= limit + EPSILON; x += dx) {
+    auto add_point = [&](double x) {
         bool   valid;
         double y = solve_neovius(x, z_cos, z_sin, valid);
-
         if (valid) {
             Vec2d p_curr(x, y);
-
-            if (last_valid) {
-                // Determine if we should subdivide
-                // We use the tolerance check similar to Gyroid
-
-                // But wait, Gyroid generates 'points' first then refines passes.
-                // We'll use the recursive approach inline or post-pass.
-                // Let's use the post-pass approach from Gyroid for consistency and speed.
-                points.push_back(p_curr);
+            if (current_segment.empty()) {
+                current_segment.push_back(p_curr);
             } else {
-                // Gap in validity? Start new segment or jump?
-                // For infill, we usually want continuous lines.
-                // If there's a gap, it means the surface doesn't exist there.
-                // effectively we reset.
-                points.push_back(p_curr);
+                // Recursive subdivision for smoothness
+                subdivide_segment(current_segment, current_segment.back(), p_curr, ctx, true, tolerance);
+                current_segment.push_back(p_curr);
             }
-            last_p     = p_curr;
-            last_valid = true;
-        } else {
-            last_valid = false;
-            // What if valid region ends?
-            // We just skip.
+        } else if (!current_segment.empty()) {
+            segments.push_back(std::move(current_segment));
+            current_segment.clear();
         }
+    };
+
+    for (double x = 0; x <= limit + EPSILON; x += dx) {
+        add_point(std::min(x, limit));
     }
+    if (!current_segment.empty())
+        segments.push_back(std::move(current_segment));
 
-    // Ensure end point at exactly 2pi if needed for periodicity
-    if (width >= 2 * PI - EPSILON && points.size() > 1) {
-        // Force 2pi point to match 0 point y (periodicity)
-        bool   valid;
-        double y0 = solve_neovius(0, z_cos, z_sin, valid);
-        if (valid) {
-            Vec2d endP(2 * PI, y0);
-            if ((points.back() - endP).norm() > 1e-4) {
-                points.push_back(endP);
-            }
-        }
-    }
-
-    // Refinement pass
-    // We iterate the points vector and insert points where curvature is high.
-    // However, vector insertion is slow. Better rebuild or use list.
-    // Gyroid.cpp uses a loop with insertions.
-
-    for (int pass = 0; pass < 2; ++pass) // 2 passes of refinement
-    {
-        size_t size = points.size();
-        for (size_t i = 1; i < size; ++i) {
-            Vec2d& p_left  = points[i - 1];
-            Vec2d& p_right = points[i];
-
-            // Check middle
-            double x_mid       = (p_left.x() + p_right.x()) * 0.5;
-            Vec2d  p_mid_curve = evaluate_neovius(x_mid, ctx, true); // true = upper branch logic
-
-            if (std::isnan(p_mid_curve.y()))
-                continue; // In hole
-
-            // Linear midpoint
-            Vec2d p_mid_seg = (p_left + p_right) * 0.5;
-
-            if ((p_mid_curve - p_mid_seg).squaredNorm() > scale_(tolerance) * scale_(tolerance)) {
-                // Insert
-                points.emplace_back(p_mid_curve);
-            }
-        }
-
-        // Sort back into place
-        std::sort(points.begin(), points.end(), [](const Vec2d& a, const Vec2d& b) { return a.x() < b.x(); });
-    }
-
-    return points;
+    return segments;
 }
 
-static inline Polyline make_wave(
-    const std::vector<Vec2d>& one_period, double width, double height, double offset_y, double scaleFactor, bool vertical, bool flip_y)
+static inline void make_wave(Polylines&                             result,
+                             const std::vector<std::vector<Vec2d>>& segments,
+                             double                                 width,
+                             double                                 height,
+                             double                                 offset_y,
+                             double                                 scaleFactor,
+                             bool                                   vertical,
+                             bool                                   flip_y)
 {
     // Tiling logic
-    Polyline polyline;
-    if (one_period.empty())
-        return polyline;
+    if (segments.empty())
+        return;
 
-    double period = 2 * PI;
+    double period      = 2 * PI;
+    int    num_periods = int(ceil(width / period + 0.1));
 
-    // We assemble the wave by repeating 'one_period'
-    // For Neovius, y(x) + 2*pi is also a solution?
-    // The cos(y) is periodic. So y + 2*k*pi is valid.
+    for (const auto& segment : segments) {
+        Polyline polyline;
+        for (int i = 0; i < num_periods; ++i) {
+            double shift = i * period;
+            for (const auto& p : segment) {
+                double x = p.x() + shift;
+                if (x > width + EPSILON)
+                    break;
 
-    std::vector<Vec2d> points;
-    double             current_x_base = 0;
+                double y_raw = p.y();
+                if (flip_y)
+                    y_raw = -y_raw;
 
-    // How many periods to cover width?
-    int num_periods = int(ceil(width / period + 0.1));
-
-    points.reserve(one_period.size() * num_periods);
-
-    for (int i = 0; i < num_periods; ++i) {
-        double shift = i * period;
-        for (const auto& p : one_period) {
-            double x = p.x() + shift;
-            if (x > width + EPSILON)
-                break;
-
-            double y_raw = p.y();
-            if (flip_y)
-                y_raw = -y_raw; // The other branch of acos
-
-            // Apply Offset (Y-position of the wave center)
-            double y_final = y_raw + offset_y;
-
-            // Clamp to bounding box height?
-            // Actually slicing usually clips later, but clamping helps robustness
-            // y_final = std::clamp(y_final, 0.0, height);
-
-            // Transform to output coords
-            Vec2d out = vertical ? Vec2d(y_final, x) : Vec2d(x, y_final);
-
-            points.emplace_back(out);
+                double y_final = y_raw + offset_y;
+                Vec2d  out     = vertical ? Vec2d(y_final, x) : Vec2d(x, y_final);
+                polyline.points.emplace_back((out * scaleFactor).cast<coord_t>());
+            }
+            // If the segment ends exactly at PI or 2PI, we could connect to the next tile.
+            // But breaking is safer to avoid gaps/spikes when solve_neovius hits limits.
+            if (!polyline.points.empty() && segment.back().x() < period - EPSILON) {
+                result.push_back(std::move(polyline));
+                polyline = Polyline();
+            }
         }
-
-        // Add a break between periods? No, it should be continuous.
-        // p.back() of period i should match p.front() of period i+1 (mod 2pi)
+        if (!polyline.points.empty())
+            result.push_back(std::move(polyline));
     }
-
-    // Convert to scaled points
-    polyline.points.reserve(points.size());
-    for (const auto& pt : points) {
-        polyline.points.emplace_back((pt * scaleFactor).cast<coord_t>());
-    }
-
-    return polyline;
 }
 
 static Polylines make_neovius_waves(double gridZ, double density_adjusted, double line_spacing, double width, double height)
@@ -345,35 +245,19 @@ static Polylines make_neovius_waves(double gridZ, double density_adjusted, doubl
     // But we handle this via gaps or we could swap x/y if needed.
     // For specific layers (Z fixed), the isolines are level sets.
 
-    bool vertical = false; // Standard orientation
+    // For Neovius, we switch axes when |cos(z)| is large to stay away from the singularities
+    // of the y(x,z) solver which occur when 3 + 4 cx cz = 0.
+    bool vertical = (std::abs(z_cos) > 0.5);
 
-    // Generate one period of the "positive" branch y = +acos(...)
-    std::vector<Vec2d> period_pos = make_one_period(width, scaleFactor, z_cos, z_sin, tolerance);
+    auto segments = make_one_period(width, scaleFactor, z_cos, z_sin, tolerance);
 
     Polylines result;
-
-    // Neovius cells repeat every 2*PI in space.
-    // We need to cover the 'height' with these waves.
-    // For each Y-period (2PI), we have a positive branch centered at 0,
-    // and potentially other branches?
-    // cos(y) = val. Solutions are y = +/- acos(val) + 2*k*PI.
-    // So we need:
-    // 1. y = acos(val) + 2kPI
-    // 2. y = -acos(val) + 2kPI
-
-    double start_y = -2 * PI; // Start a bit outside
-    double end_y   = height + 2 * PI;
+    double    start_y = -2 * PI;
+    double    end_y   = height + 2 * PI;
 
     for (double y_base = start_y; y_base < end_y; y_base += 2 * PI) {
-        // Positive branch
-        Polyline p1 = make_wave(period_pos, width, height, y_base, scaleFactor, vertical, false);
-        if (!p1.points.empty())
-            result.emplace_back(std::move(p1));
-
-        // Negative branch
-        Polyline p2 = make_wave(period_pos, width, height, y_base, scaleFactor, vertical, true);
-        if (!p2.points.empty())
-            result.emplace_back(std::move(p2));
+        make_wave(result, segments, width, height, y_base, scaleFactor, vertical, false);
+        make_wave(result, segments, width, height, y_base, scaleFactor, vertical, true);
     }
 
     return result;
@@ -443,10 +327,17 @@ void FillNeovius::_fill_surface_single(const FillParams&              params,
         pl.translate(bb.min);
 
     multiline_fill(polylines, params, spacing);
-    polylines = intersection_pl(polylines, expolygon);
+    {
+        ExPolygons expolygons_off;
+        if (this->overlap > 0)
+            expolygons_off = offset_ex(expolygon, float(scale_(this->overlap)));
+        else
+            expolygons_off.push_back(expolygon);
+        polylines = intersection_pl(polylines, expolygons_off);
+    }
 
     if (!polylines.empty()) {
-        const double minlength = scale_(0.8 * this->spacing);
+        const double minlength = scale_(0.2 * this->spacing); // More lenient pruning
         polylines.erase(std::remove_if(polylines.begin(), polylines.end(),
                                        [minlength](const Polyline& pl) { return pl.length() < minlength; }),
                         polylines.end());
