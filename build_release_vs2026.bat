@@ -1,8 +1,9 @@
-@REM OrcaSlicer build script for Windows (VS 2026) - Version 2.2 (Canary)
+@REM OrcaSlicer build script for Windows (VS 2026) - Version 2.3 (Canary)
 @echo off
-set WP=%CD%
-echo Current Directory: %WP%
-echo Script Version: 2.2 (Canary)
+set "WP=%~dp0"
+if "%WP:~-1%"=="\" set "WP=%WP:~0,-1%"
+echo Base Path: %WP%
+echo Script Version: 2.3 (Canary)
 
 set debug=OFF
 set debuginfo=OFF
