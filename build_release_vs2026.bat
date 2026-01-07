@@ -1,8 +1,8 @@
-@REM OrcaSlicer build script for Windows (VS 2026) - Version 2.0 (Canary)
+`@REM OrcaSlicer build script for Windows (VS 2026) - Version 2.1 (Canary)
 @echo off
 set WP=%CD%
 echo Current Directory: %WP%
-echo Script Version: 2.0 (Canary)
+echo Script Version: 2.1 (Canary)
 
 set debug=OFF
 set debuginfo=OFF
@@ -40,20 +40,19 @@ if "%1"=="slicer" (
     GOTO :slicer
 )
 
-echo.
 echo ##########################################
 echo # Building Dependencies...
 echo ##########################################
 echo.
 
+dir "%WP%\deps\CMakeLists.txt" || (
+    echo ERROR: %WP%\deps\CMakeLists.txt NOT FOUND!
+    exit /b 1
+)
+
 echo on
 set CMAKE_POLICY_VERSION_MINIMUM=3.5
-cmake ../ -G "%GENERATOR%" -A x64 -DCMAKE_BUILD_TYPE=%build_type%
-if %errorlevel% neq 0 (
-    echo "Generator %GENERATOR% failed, trying Visual Studio 19 2026..."
-    set "GENERATOR=Visual Studio 19 2026"
-    cmake ../ -G "Visual Studio 19 2026" -A x64 -DCMAKE_BUILD_TYPE=%build_type%
-)
+cmake "%WP%\deps" -G "%GENERATOR%" -A x64 -DCMAKE_BUILD_TYPE=%build_type%
 if %errorlevel% neq 0 (
     echo "Dependency configuration failed!"
     exit /b %errorlevel%
@@ -109,7 +108,7 @@ if defined BOOST_DIR_SET (
 
 echo on
 set CMAKE_POLICY_VERSION_MINIMUM=3.5
-cmake .. -G "%GENERATOR%" -A x64 -DORCA_TOOLS=ON %SIG_FLAG% -DCMAKE_BUILD_TYPE=%build_type% -DCMAKE_PREFIX_PATH="%PREFIX_PATH%" -DWXWIN="%WXWIN%" %BOOST_FLAGS% -DBoost_DEBUG=ON
+cmake "%WP%" -G "%GENERATOR%" -A x64 -DORCA_TOOLS=ON %SIG_FLAG% -DCMAKE_BUILD_TYPE=%build_type% -DCMAKE_PREFIX_PATH="%PREFIX_PATH%" -DWXWIN="%WXWIN%" %BOOST_FLAGS% -DBoost_DEBUG=ON
 if %errorlevel% neq 0 (
     echo "OrcaSlicer configuration failed!"
     exit /b %errorlevel%
