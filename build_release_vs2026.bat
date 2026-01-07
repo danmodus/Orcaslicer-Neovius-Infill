@@ -1,8 +1,8 @@
-`@REM OrcaSlicer build script for Windows (VS 2026) - Version 2.1 (Canary)
+@REM OrcaSlicer build script for Windows (VS 2026) - Version 2.2 (Canary)
 @echo off
 set WP=%CD%
 echo Current Directory: %WP%
-echo Script Version: 2.1 (Canary)
+echo Script Version: 2.2 (Canary)
 
 set debug=OFF
 set debuginfo=OFF
@@ -30,11 +30,6 @@ if not defined GENERATOR set GENERATOR=Visual Studio 18 2026
 echo Using generator: %GENERATOR%
 
 setlocal DISABLEDELAYEDEXPANSION 
-cd deps
-if not exist %build_dir% mkdir %build_dir%
-cd %build_dir%
-set "SIG_FLAG="
-if defined ORCA_UPDATER_SIG_KEY set "SIG_FLAG=-DORCA_UPDATER_SIG_KEY=%ORCA_UPDATER_SIG_KEY%"
 
 if "%1"=="slicer" (
     GOTO :slicer
@@ -45,10 +40,18 @@ echo # Building Dependencies...
 echo ##########################################
 echo.
 
-dir "%WP%\deps\CMakeLists.txt" || (
-    echo ERROR: %WP%\deps\CMakeLists.txt NOT FOUND!
+if not exist "%WP%\deps\CMakeLists.txt" (
+    echo ERROR: "%WP%\deps\CMakeLists.txt" NOT FOUND!
+    echo Directory listing of %WP%\deps:
+    dir "%WP%\deps"
     exit /b 1
 )
+
+cd deps
+if not exist %build_dir% mkdir %build_dir%
+cd %build_dir%
+set "SIG_FLAG="
+if defined ORCA_UPDATER_SIG_KEY set "SIG_FLAG=-DORCA_UPDATER_SIG_KEY=%ORCA_UPDATER_SIG_KEY%"
 
 echo on
 set CMAKE_POLICY_VERSION_MINIMUM=3.5
