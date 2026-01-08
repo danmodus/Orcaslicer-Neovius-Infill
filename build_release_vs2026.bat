@@ -1,9 +1,9 @@
-@REM OrcaSlicer build script for Windows (VS 2026) - Version 2.3 (Canary)
+@REM OrcaSlicer build script for Windows (VS 2026) - Version 2.4 (Canary)
 @echo off
 set "WP=%~dp0"
 if "%WP:~-1%"=="\" set "WP=%WP:~0,-1%"
 echo Base Path: %WP%
-echo Script Version: 2.3 (Canary)
+echo Script Version: 2.4 (Canary)
 
 set debug=OFF
 set debuginfo=OFF
@@ -26,8 +26,19 @@ if "%debug%"=="ON" (
 echo Build type: %build_type%
 echo Build dir: %build_dir%
 
-@REM Try to detect the correct generator for VS 2026
-if not defined GENERATOR set GENERATOR=Visual Studio 18 2026
+@REM Detect best generator
+set "GENERATOR="
+cmake --help | findstr /C:"Visual Studio 18 2026" >nul && set "GENERATOR=Visual Studio 18 2026"
+if not defined GENERATOR (
+    cmake --help | findstr /C:"Visual Studio 17 2022" >nul && (
+        set "GENERATOR=Visual Studio 17 2022"
+        echo Automatically downgraded to Visual Studio 17 2022
+    )
+)
+if not defined GENERATOR (
+    set "GENERATOR=Visual Studio 18 2026"
+    echo WARNING: VS 2026 or VS 2022 not clearly detected in 'cmake --help'. Forcing VS 2026.
+)
 echo Using generator: %GENERATOR%
 
 setlocal DISABLEDELAYEDEXPANSION 
@@ -36,6 +47,7 @@ if "%1"=="slicer" (
     GOTO :slicer
 )
 
+echo.
 echo ##########################################
 echo # Building Dependencies...
 echo ##########################################
@@ -69,7 +81,13 @@ if %errorlevel% neq 0 (
 )
 @echo off
 
-if "%1"=="deps" exit /b 0
+if "%1"=="deps" (
+    echo.
+    echo ##########################################
+    echo # DEPENDENCY BUILD COMPLETE!
+    echo ##########################################
+    exit /b 0
+)
 
 :slicer
 echo.
@@ -129,3 +147,14 @@ if exist scripts\run_gettext.bat call scripts\run_gettext.bat
 cd %build_dir%
 cmake --build . --target install --config %build_type%
 
+if %errorlevel% neq 0 (
+    echo "Installation phase failed!"
+    exit /b %errorlevel%
+)
+
+echo.
+echo ##########################################
+echo # ORCASLICER BUILD SUCCESSFUL!
+echo # Application is ready in: %WP%\%build_dir%\OrcaSlicer
+echo ##########################################
+echo.
